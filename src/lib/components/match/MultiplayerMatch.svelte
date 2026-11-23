@@ -28,6 +28,8 @@
 		<div class="me">
 			{#if finished}
 				&nbsp;
+			{:else if match.cancelsInSec !== null}
+				<span class="away">{opponent} left — match cancels in {match.cancelsInSec}s</span>
 			{:else if iAmDone}
 				Out of guesses — waiting for {opponent}
 			{:else if match.opponentDone}
@@ -85,6 +87,10 @@
 		padding: 8px 16px 0;
 		font-size: 0.85rem;
 		color: var(--muted);
+	}
+	.away {
+		color: var(--lost);
+		font-weight: 700;
 	}
 	.opponent {
 		display: flex;

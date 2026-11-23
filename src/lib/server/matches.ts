@@ -9,6 +9,8 @@ import type { LobbyState, MatchSummary, MatchView } from '#lib/multiplayer/types
 
 /** A player counts as online if they polled within this window. */
 const ONLINE_WINDOW_MS = 8_000;
+/** An active match is cancelled (deleted outright) once either player has been away this long. */
+export const ABANDON_MS = 60_000;
 
 interface MatchDoc {
 	_id: ObjectId;
@@ -23,6 +25,10 @@ interface MatchDoc {
 	acked: Player[];
 	createdAt: Date;
 	finishedAt?: Date;
+	/** Active matches only: each player's last heartbeat during the match. */
+	seen?: Record<Player, Date>;
+	/** Active matches only: earliest `seen` + ABANDON_MS. A TTL index deletes the match once this passes. */
+	expiresAt?: Date;
 }
 
 interface PresenceDoc {
@@ -43,8 +49,10 @@ const isDone = (m: MatchDoc, p: Player) => {
 	return g.length >= m.maxGuesses || (g.length > 0 && isSolved(g[g.length - 1].result));
 };
 
-function toView(m: MatchDoc, p: Player): MatchView {
+function toView(m: MatchDoc, p: Player, now = new Date()): MatchView {
 	const opp = opponentOf(p);
+	const oppSeen = m.seen?.[opp];
+	const oppAway = m.status === 'active' && !!oppSeen && now.getTime() - oppSeen.getTime() > ONLINE_WINDOW_MS;
 	return {
 		id: m._id.toHexString(),
 		length: m.length,
@@ -54,12 +62,33 @@ function toView(m: MatchDoc, p: Player): MatchView {
 		opponentResults: m.guesses[opp].map((g) => g.result),
 		opponentDone: isDone(m, opp),
 		winner: m.winner,
-		word: m.status === 'finished' ? m.word : undefined
+		word: m.status === 'finished' ? m.word : undefined,
+		cancelsInSec: oppAway
+			? Math.max(0, Math.ceil((oppSeen.getTime() + ABANDON_MS - now.getTime()) / 1000))
+			: null
 	};
 }
 
+/** Heartbeat on the match itself; `expiresAt` tracks whichever player was seen least recently. */
+function touchMatch(matches: Collection<MatchDoc>, id: ObjectId, player: Player, now: Date) {
+	return matches.findOneAndUpdate(
+		{ _id: id, status: 'active' },
+		[
+			{ $set: { [`seen.${player}`]: now } },
+			{ $set: { expiresAt: { $add: [{ $min: PLAYERS.map((p) => `$seen.${p}`) }, ABANDON_MS] } } }
+		],
+		{ returnDocument: 'after' }
+	);
+}
+
+const finishedFields = (winner: Player | null) => ({
+	$set: { status: 'finished' as const, winner, finishedAt: new Date() },
+	$unset: { seen: '' as const, expiresAt: '' as const }
+});
+
 async function createMatch(matches: Collection<MatchDoc>) {
 	const length = DEFAULT_WORD_LENGTH;
+	const now = new Date();
 	try {
 		await matches.insertOne({
 			_id: new ObjectId(),
@@ -70,7 +99,9 @@ async function createMatch(matches: Collection<MatchDoc>) {
 			guesses: Object.fromEntries(PLAYERS.map((p) => [p, []])) as unknown as MatchDoc['guesses'],
 			winner: null,
 			acked: [],
-			createdAt: new Date()
+			createdAt: now,
+			seen: Object.fromEntries(PLAYERS.map((p) => [p, now])) as Record<Player, Date>,
+			expiresAt: new Date(now.getTime() + ABANDON_MS)
 		});
 	} catch (err) {
 		// The other player created it at the same moment — the unique index kept only one.
@@ -91,7 +122,16 @@ export async function pollLobby(player: Player, entering: boolean): Promise<Lobb
 	await presence.updateOne({ _id: player }, { $set: { lastSeen: now } }, { upsert: true });
 
 	let active = await matches.findOne({ status: 'active' });
-	if (active) return { phase: 'playing', match: toView(active, player) };
+	if (active?.expiresAt && active.expiresAt <= now) {
+		// Someone was away too long: drop the match as if it never happened.
+		// (The TTL index does the same when nobody is around to poll.)
+		await matches.deleteOne({ _id: active._id, status: 'active', expiresAt: { $lte: now } });
+		active = null;
+	}
+	if (active) {
+		active = (await touchMatch(matches, active._id, player, now)) ?? (await matches.findOne({ _id: active._id }));
+		if (active?.status === 'active') return { phase: 'playing', match: toView(active, player, now) };
+	}
 
 	const latest = await matches.findOne({}, { sort: { createdAt: -1 } });
 	if (latest && !latest.acked.includes(player)) {
@@ -133,7 +173,9 @@ export async function submitGuess(player: Player, matchId: string, raw: string):
 	const _id = new ObjectId(matchId);
 	const match = await matches.findOne({ _id });
 
+	const now = new Date();
 	if (!match || match.status !== 'active') return { ok: false, error: 'Match is over' };
+	if (match.expiresAt && match.expiresAt <= now) return { ok: false, error: 'Match was cancelled' };
 	if (isDone(match, player)) return { ok: false, error: 'No guesses left' };
 
 	const word = raw.toLowerCase();
@@ -143,9 +185,14 @@ export async function submitGuess(player: Player, matchId: string, raw: string):
 	const result = evaluateGuess(word, match.word);
 	const guessesPath = `guesses.${player}` as const;
 
-	// Guarded push: only applies while the match is active and this player still has guesses left.
+	// Guarded push: only applies while the match is live and this player still has guesses left.
 	const updated = await matches.findOneAndUpdate(
-		{ _id, status: 'active', [`${guessesPath}.${match.maxGuesses - 1}`]: { $exists: false } },
+		{
+			_id,
+			status: 'active',
+			expiresAt: { $gt: now },
+			[`${guessesPath}.${match.maxGuesses - 1}`]: { $exists: false }
+		},
 		{ $push: { [guessesPath]: { word, result } } },
 		{ returnDocument: 'after' }
 	);
@@ -153,15 +200,9 @@ export async function submitGuess(player: Player, matchId: string, raw: string):
 
 	if (isSolved(result)) {
 		// First solver wins; the status filter makes this a no-op for whoever is second.
-		await matches.updateOne(
-			{ _id, status: 'active' },
-			{ $set: { status: 'finished', winner: player, finishedAt: new Date() } }
-		);
+		await matches.updateOne({ _id, status: 'active' }, finishedFields(player));
 	} else if (PLAYERS.every((p) => isDone(updated, p))) {
-		await matches.updateOne(
-			{ _id, status: 'active' },
-			{ $set: { status: 'finished', winner: null, finishedAt: new Date() } }
-		);
+		await matches.updateOne({ _id, status: 'active' }, finishedFields(null));
 	}
 
 	return { ok: true, result };

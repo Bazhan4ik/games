@@ -10,6 +10,8 @@ const POLL_MS = 1500;
 export class MultiplayerSession {
 	state = $state<LobbyState | null>(null);
 	error = $state<string | null>(null);
+	/** Set when a match disappears mid-game because someone was away too long. */
+	cancelled = $state(false);
 
 	#timer: ReturnType<typeof setTimeout> | undefined;
 	#running = false;
@@ -36,7 +38,10 @@ export class MultiplayerSession {
 			const res = await fetch(`/api/state${this.#entering ? '?enter' : ''}`);
 			if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? res.statusText);
 			this.#entering = false;
-			this.state = await res.json();
+			const next: LobbyState = await res.json();
+			if (next.phase !== 'waiting') this.cancelled = false;
+			else if (this.state?.phase === 'playing') this.cancelled = true;
+			this.state = next;
 			this.error = null;
 		} catch (err) {
 			this.error = err instanceof Error ? err.message : 'Connection problem';

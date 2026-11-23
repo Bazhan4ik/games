@@ -5,7 +5,7 @@
 
 <div class="picker">
 	<h2>Who are you?</h2>
-	<p>This device will remember you.</p>
+	<p>Choose carefully — this device stays as you for a week and can't switch.</p>
 	<form method="POST" action="?/pick" use:enhance>
 		{#each PLAYERS as player (player)}
 			<button name="player" value={player}>{player}</button>

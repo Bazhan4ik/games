@@ -27,6 +27,14 @@ async function ensureIndexes(db: Db) {
 				{ status: 1 },
 				{ unique: true, partialFilterExpression: { status: 'active' }, name: 'one_active_match' }
 			),
-		db.collection('matches').createIndex({ createdAt: -1 })
+		db.collection('matches').createIndex({ createdAt: -1 }),
+		// Deletes abandoned matches even when neither player comes back to trigger it.
+		// Finished matches have no `expiresAt`, so they're never touched.
+		db
+			.collection('matches')
+			.createIndex(
+				{ expiresAt: 1 },
+				{ expireAfterSeconds: 0, partialFilterExpression: { status: 'active' }, name: 'abandoned_match_ttl' }
+			)
 	]);
 }

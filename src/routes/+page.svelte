@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { enhance } from '$app/forms';
 	import { invalidate } from '$app/navigation';
 	import PlayerPicker from '#lib/components/match/PlayerPicker.svelte';
 	import WaitingRoom from '#lib/components/match/WaitingRoom.svelte';
@@ -36,13 +35,7 @@
 	<header>
 		<h1>Wordle</h1>
 		{#if data.player}
-			<form method="POST" action="?/forget" use:enhance={() => {
-				session.stop();
-				return ({ update }) => update();
-			}}>
-				<span>You are <strong>{data.player}</strong></span>
-				<button type="submit">switch</button>
-			</form>
+			<span class="me">You are <strong>{data.player}</strong></span>
 		{/if}
 	</header>
 
@@ -69,6 +62,7 @@
 				{opponent}
 				opponentOnline={state?.phase === 'waiting' && state.opponentOnline}
 				opponentReady={state?.phase === 'waiting' && state.opponentReady}
+				cancelled={session.cancelled}
 			/>
 			<MatchHistory history={data.history} />
 		{/if}
@@ -102,26 +96,14 @@
 		font-size: 1.75rem;
 		letter-spacing: 0.02em;
 	}
-	header form {
+	.me {
 		position: absolute;
 		right: 16px;
-		display: flex;
-		align-items: baseline;
-		gap: 6px;
 		font-size: 0.8rem;
 		color: var(--muted);
 	}
-	header strong {
+	.me strong {
 		color: var(--text);
-	}
-	header button {
-		padding: 0;
-		border: 0;
-		background: none;
-		color: var(--muted);
-		font: inherit;
-		text-decoration: underline;
-		cursor: pointer;
 	}
 	.error {
 		margin: 8px 16px 0;

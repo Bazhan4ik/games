@@ -3,12 +3,17 @@
 		opponent: string;
 		opponentOnline: boolean;
 		opponentReady: boolean;
+		/** The previous match was cancelled because a player was away too long. */
+		cancelled?: boolean;
 	}
 
-	let { opponent, opponentOnline, opponentReady }: Props = $props();
+	let { opponent, opponentOnline, opponentReady, cancelled = false }: Props = $props();
 </script>
 
 <div class="waiting">
+	{#if cancelled}
+		<p class="cancelled">Match cancelled — a player was away for over a minute.</p>
+	{/if}
 	<div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
 	{#if opponentOnline && opponentReady}
 		<p>{opponent} is here — starting…</p>
@@ -27,6 +32,12 @@
 	p {
 		margin: 16px 0 0;
 		font-size: 1.1rem;
+	}
+	.cancelled {
+		margin: 0 0 24px;
+		font-size: 0.9rem;
+		font-weight: 700;
+		color: var(--lost);
 	}
 	.dots {
 		display: inline-flex;

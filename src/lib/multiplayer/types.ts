@@ -13,6 +13,8 @@ export interface MatchView {
 	opponentDone: boolean;
 	winner: Player | null;
 	word?: string;
+	/** Set while the opponent is away: seconds until the match is cancelled. */
+	cancelsInSec: number | null;
 }
 
 export type LobbyState =

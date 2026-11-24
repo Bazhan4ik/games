@@ -35,9 +35,6 @@
 <div class="app" class:fill={inMatch}>
 	<header>
 		<h1>Wordle</h1>
-		{#if data.player}
-			<span class="me">You are <strong>{data.player}</strong></span>
-		{/if}
 	</header>
 
 	{#if !data.player}
@@ -87,7 +84,6 @@
 		overflow: hidden;
 	}
 	header {
-		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -101,25 +97,10 @@
 		font-size: 1.75rem;
 		letter-spacing: 0.02em;
 	}
-	.me {
-		position: absolute;
-		right: 16px;
-		font-size: 0.8rem;
-		color: var(--muted);
-	}
-	.me strong {
-		color: var(--text);
-	}
 	.error {
 		margin: 8px 16px 0;
 		color: var(--lost);
 		font-size: 0.85rem;
 		text-align: center;
-	}
-	@media (max-width: 380px) {
-		header {
-			justify-content: flex-start;
-			padding-left: 16px;
-		}
 	}
 </style>

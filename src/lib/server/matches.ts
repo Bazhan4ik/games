@@ -6,7 +6,7 @@ import { PLAYERS, opponentOf, type Player } from '#lib/players.ts';
 import { evaluateGuess, isSolved } from '#lib/wordle/evaluate.ts';
 import { DEFAULT_MAX_GUESSES, DEFAULT_WORD_LENGTH } from '#lib/wordle/config.ts';
 import type { EvaluatedGuess, GuessResponse } from '#lib/wordle/types.ts';
-import type { LobbyState, MatchSummary, MatchView } from '#lib/multiplayer/types.ts';
+import type { LobbyState, MatchDetail, MatchSummary, MatchView } from '#lib/multiplayer/types.ts';
 
 /** A player counts as online if they polled within this window. */
 const ONLINE_WINDOW_MS = 8_000;
@@ -35,6 +35,8 @@ interface MatchDoc {
 interface PresenceDoc {
 	_id: Player;
 	lastSeen: Date;
+	/** Pressed "Enter match" and is waiting for an opponent. */
+	queued?: boolean;
 }
 
 async function collections() {
@@ -87,7 +89,7 @@ const finishedFields = (winner: Player | null) => ({
 	$unset: { seen: '' as const, expiresAt: '' as const }
 });
 
-async function createMatch(matches: Collection<MatchDoc>) {
+async function createMatch(matches: Collection<MatchDoc>, presence: Collection<PresenceDoc>) {
 	const length = DEFAULT_WORD_LENGTH;
 	const now = new Date();
 	try {
@@ -104,6 +106,8 @@ async function createMatch(matches: Collection<MatchDoc>) {
 			seen: Object.fromEntries(PLAYERS.map((p) => [p, now])) as Record<Player, Date>,
 			expiresAt: new Date(now.getTime() + ABANDON_MS)
 		});
+		// Both players leave the queue; after this match they start from the home page again.
+		await presence.updateMany({}, { $set: { queued: false } });
 	} catch (err) {
 		// The other player created it at the same moment — the unique index kept only one.
 		if ((err as { code?: number }).code !== 11000) throw err;
@@ -113,14 +117,19 @@ async function createMatch(matches: Collection<MatchDoc>) {
 
 /**
  * Heartbeat + matchmaking. Called by each client on a short poll.
- * `entering` marks a fresh page visit: any unseen result is dismissed and the player goes straight to matchmaking.
+ * `entering` marks a fresh page visit: any unseen result is dismissed and the player starts on the
+ * home page, out of the queue.
  */
 export async function pollLobby(player: Player, entering: boolean): Promise<LobbyState> {
 	const { matches, presence } = await collections();
 	const now = new Date();
 	const opp = opponentOf(player);
 
-	await presence.updateOne({ _id: player }, { $set: { lastSeen: now } }, { upsert: true });
+	const self = await presence.findOneAndUpdate(
+		{ _id: player },
+		{ $set: { lastSeen: now, ...(entering && { queued: false }) } },
+		{ upsert: true, returnDocument: 'after' }
+	);
 
 	let active = await matches.findOne({ status: 'active' });
 	if (active?.expiresAt && active.expiresAt <= now) {
@@ -143,14 +152,22 @@ export async function pollLobby(player: Player, entering: boolean): Promise<Lobb
 
 	const oppPresence = await presence.findOne({ _id: opp });
 	const opponentOnline = !!oppPresence && now.getTime() - oppPresence.lastSeen.getTime() < ONLINE_WINDOW_MS;
-	const opponentReady = !latest || latest.acked.includes(opp);
+	const opponentQueued = opponentOnline && !!oppPresence.queued;
 
-	if (opponentOnline && opponentReady) {
-		active = await createMatch(matches);
+	if (!self?.queued) return { phase: 'home', opponentQueued };
+
+	if (opponentQueued) {
+		active = await createMatch(matches, presence);
 		if (active) return { phase: 'playing', match: toView(active, player) };
 	}
 
-	return { phase: 'waiting', opponentOnline, opponentReady };
+	return { phase: 'queued', opponentOnline };
+}
+
+/** "Enter match" / "Cancel" on the home page. */
+export async function setQueued(player: Player, queued: boolean) {
+	const { presence } = await collections();
+	await presence.updateOne({ _id: player }, { $set: { queued, lastSeen: new Date() } }, { upsert: true });
 }
 
 export async function acknowledgeResult(player: Player, matchId: string) {
@@ -215,10 +232,10 @@ export async function submitGuess(player: Player, matchId: string, raw: string):
 	return { ok: true, result };
 }
 
-export async function matchHistory(limit = 50): Promise<MatchSummary[]> {
+export async function matchHistory(): Promise<MatchSummary[]> {
 	const { matches } = await collections();
 	const docs = await matches
-		.find({ status: 'finished' }, { sort: { finishedAt: -1 }, limit, projection: { guesses: 0 } })
+		.find({ status: 'finished' }, { sort: { finishedAt: -1 }, projection: { guesses: 0 } })
 		.toArray();
 	return docs.map((m) => ({
 		id: m._id.toHexString(),
@@ -227,4 +244,21 @@ export async function matchHistory(limit = 50): Promise<MatchSummary[]> {
 		loser: m.winner ? opponentOf(m.winner) : null,
 		finishedAt: (m.finishedAt ?? m.createdAt).toISOString()
 	}));
+}
+
+/** Both players' guesses for a finished match. Active matches are never exposed (they'd reveal the answer). */
+export async function matchDetail(matchId: string): Promise<MatchDetail | null> {
+	if (!ObjectId.isValid(matchId)) return null;
+	const { matches } = await collections();
+	const m = await matches.findOne({ _id: new ObjectId(matchId), status: 'finished' });
+	if (!m) return null;
+	return {
+		id: m._id.toHexString(),
+		word: m.word,
+		length: m.length,
+		maxGuesses: m.maxGuesses,
+		winner: m.winner,
+		finishedAt: (m.finishedAt ?? m.createdAt).toISOString(),
+		guesses: m.guesses
+	};
 }

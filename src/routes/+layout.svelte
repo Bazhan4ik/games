@@ -11,7 +11,12 @@
 	<meta name="theme-color" content="#ffffff" />
 </svelte:head>
 
-{@render children()}
+<div class="shell">
+	<header>
+		<a href="/"><h1>Wordle</h1></a>
+	</header>
+	{@render children()}
+</div>
 
 <style>
 	:global(:root) {
@@ -33,5 +38,36 @@
 		color: var(--text);
 		font-family: 'Helvetica Neue', Arial, sans-serif;
 		-webkit-text-size-adjust: 100%;
+	}
+
+	.shell {
+		max-width: 500px;
+		margin: 0 auto;
+		min-height: 100dvh;
+		display: flex;
+		flex-direction: column;
+	}
+	/* During a match the board + keyboard fill the screen exactly, with no page scroll. */
+	.shell:has(:global(.fill)) {
+		height: 100dvh;
+		overflow: hidden;
+	}
+	header {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 52px;
+		flex-shrink: 0;
+		border-bottom: 1px solid var(--tile-border);
+	}
+	header a {
+		color: inherit;
+		text-decoration: none;
+	}
+	h1 {
+		margin: 0;
+		font-family: Georgia, 'Times New Roman', serif;
+		font-size: 1.75rem;
+		letter-spacing: 0.02em;
 	}
 </style>

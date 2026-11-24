@@ -18,9 +18,23 @@ export interface MatchView {
 }
 
 export type LobbyState =
-	| { phase: 'waiting'; opponentOnline: boolean; /** Opponent is still looking at the last result. */ opponentReady: boolean }
+	/** On the home page; `opponentQueued` means they've pressed "Enter match" and are waiting. */
+	| { phase: 'home'; opponentQueued: boolean }
+	/** In matchmaking, waiting for the opponent to enter too. */
+	| { phase: 'queued'; opponentOnline: boolean }
 	| { phase: 'playing'; match: MatchView }
 	| { phase: 'result'; match: MatchView };
+
+/** A finished match with both players' full guesses, for the match detail page. */
+export interface MatchDetail {
+	id: string;
+	word: string;
+	length: number;
+	maxGuesses: number;
+	winner: Player | null;
+	finishedAt: string;
+	guesses: Record<Player, EvaluatedGuess[]>;
+}
 
 export interface Streak {
 	current: number;

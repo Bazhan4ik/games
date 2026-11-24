@@ -28,7 +28,9 @@ Import the repo in Vercel and add `MONGODB_URI` (and `MONGODB_DB` if needed) und
 ## How it works
 
 - **Player identity**: first visit asks "B or S?" and stores it in an httpOnly cookie that expires after 7 days (it isn't refreshed, so the device picks again weekly). There's no way to switch: the server refuses a new pick while the cookie exists.
-- **Matchmaking**: each client polls `GET /api/state` every 1.5s (Vercel functions can't hold websockets). The poll doubles as a heartbeat; when both players are online and both have dismissed the previous result, a match is created.
+- **Matchmaking**: the home page has an "Enter match" button. Pressing it puts the player in a server-side queue (`presence.queued`, via `POST /api/queue`) and shows the loader (with Cancel). Each client polls `GET /api/state` every 1.5s (Vercel functions can't hold websockets); the poll doubles as a heartbeat. When both players are queued and online, a match is created and both leave the queue. A player on the home page sees "S is waiting for you" when the other is already queued. A fresh page load always starts on the home page, out of the queue.
+- **After a match**: the result card's "Back to home" returns to the home page; entering again starts the next match.
+- **Match details**: every guess of both players is stored on the match. Each row in the home page's match list links to `/match/[id]`, which shows both players' boards. Only finished matches are viewable, so the answer of a live match can't be peeked at.
 - **Guesses** are validated and scored on the server (`POST /api/guess`), so the answer never reaches the browser until the match ends. The opponent's progress is shown as colours only.
 - **Ending**: first correct guess wins. If both run out of guesses it's recorded as a draw (shown grey in the history).
 - **Daily streak**: one shared streak — consecutive days (in `STREAK_TIMEZONE`) with at least one finished match. It only updates when a match finishes: same day → unchanged, day after the last one → +1, any gap → back to 1. Draws count; cancelled matches don't. Because it only changes on a finish, a missed day shows up as a reset the next time a match finishes. Shown in the lobby next to a flame that's grey until a match has been finished today, then orange/red; also on the result card. Logic lives in `src/lib/server/streak.ts`.
@@ -43,13 +45,15 @@ src/lib/
     types.ts, config.ts
   components/wordle/      reusable, mode-agnostic UI
     WordleGame.svelte     board + keyboard + input; evaluation delegated via `onGuess`
-    Board / Tile / Keyboard / MiniBoard
-  components/match/       two-player screens (picker, waiting room, match, history)
+    Board / Tile / Keyboard / MiniBoard / GuessGrid (read-only board)
+  components/match/       two-player screens (picker, enter button, waiting room, match, streak, history)
   multiplayer/            client polling session + shared API types
   server/                 MongoDB, match logic, word lists, player cookie
 routes/
-  +page.*                 the single page
-  api/state|guess|ack|leave
+  +layout.svelte          shared header
+  +page.*                 home page (picker, Enter match, matchmaking, match, history)
+  match/[id]/             one finished match: both players' guesses
+  api/state|queue|guess|ack|leave
 ```
 
 ### Adding a solo mode

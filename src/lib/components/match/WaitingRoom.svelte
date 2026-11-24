@@ -2,42 +2,46 @@
 	interface Props {
 		opponent: string;
 		opponentOnline: boolean;
-		opponentReady: boolean;
-		/** The previous match was cancelled because a player was away too long. */
-		cancelled?: boolean;
+		onCancel: () => void;
 	}
 
-	let { opponent, opponentOnline, opponentReady, cancelled = false }: Props = $props();
+	let { opponent, opponentOnline, onCancel }: Props = $props();
 </script>
 
 <div class="waiting">
-	{#if cancelled}
-		<p class="cancelled">Match cancelled — a player was away for over a minute.</p>
-	{/if}
 	<div class="dots" aria-hidden="true"><span></span><span></span><span></span></div>
-	{#if opponentOnline && opponentReady}
-		<p>{opponent} is here — starting…</p>
-	{:else if opponentOnline}
-		<p>Waiting for <strong>{opponent}</strong> to press Play again…</p>
-	{:else}
-		<p>Waiting for <strong>{opponent}</strong> to join…</p>
-	{/if}
+	<p role="status">
+		{#if opponentOnline}
+			Waiting for <strong>{opponent}</strong> to enter the match…
+		{:else}
+			Waiting for <strong>{opponent}</strong> to join…
+		{/if}
+	</p>
+	<button onclick={onCancel}>Cancel</button>
 </div>
 
 <style>
 	.waiting {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 16px;
 		text-align: center;
 		padding: 0 16px;
 	}
 	p {
-		margin: 16px 0 0;
+		margin: 0;
 		font-size: 1.1rem;
 	}
-	.cancelled {
-		margin: 0 0 24px;
+	button {
+		padding: 4px 8px;
+		border: 0;
+		background: none;
+		color: var(--muted);
+		font: inherit;
 		font-size: 0.9rem;
-		font-weight: 700;
-		color: var(--lost);
+		text-decoration: underline;
+		cursor: pointer;
 	}
 	.dots {
 		display: inline-flex;

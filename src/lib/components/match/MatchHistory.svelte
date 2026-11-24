@@ -20,14 +20,17 @@
 		<ol>
 			{#each history as m (m.id)}
 				<li>
-					{#if m.winner && m.loser}
-						<span class="won">{m.winner}</span>
-						<span class="lost">{m.loser}</span>
-					{:else}
-						<span class="draw">{PLAYERS[0]}</span>
-						<span class="draw">{PLAYERS[1]}</span>
-					{/if}
-					<span class="word">{m.word}</span>
+					<a href="/match/{m.id}">
+						{#if m.winner && m.loser}
+							<span class="won">{m.winner}</span>
+							<span class="lost">{m.loser}</span>
+						{:else}
+							<span class="draw">{PLAYERS[0]}</span>
+							<span class="draw">{PLAYERS[1]}</span>
+						{/if}
+						<span class="word">{m.word}</span>
+						<span class="chevron" aria-hidden="true">›</span>
+					</a>
 				</li>
 			{/each}
 		</ol>
@@ -62,11 +65,26 @@
 		padding: 0;
 	}
 	li {
-		display: grid;
-		grid-template-columns: 3rem 3rem 1fr;
-		padding: 8px 0;
 		border-bottom: 1px solid var(--tile-border);
+	}
+	a {
+		display: grid;
+		grid-template-columns: 3rem 3rem 1fr auto;
+		align-items: center;
+		padding: 10px 4px;
+		color: inherit;
 		font-weight: 700;
+		text-decoration: none;
+		-webkit-tap-highlight-color: transparent;
+	}
+	a:hover,
+	a:focus-visible {
+		background: #f6f7f8;
+	}
+	.chevron {
+		color: var(--muted);
+		font-size: 1.25rem;
+		line-height: 1;
 	}
 	.won {
 		color: var(--correct);

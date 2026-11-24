@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { invalidate } from '$app/navigation';
 	import PlayerPicker from '#lib/components/match/PlayerPicker.svelte';
+	import EnterMatch from '#lib/components/match/EnterMatch.svelte';
 	import WaitingRoom from '#lib/components/match/WaitingRoom.svelte';
 	import MultiplayerMatch from '#lib/components/match/MultiplayerMatch.svelte';
 	import MatchHistory from '#lib/components/match/MatchHistory.svelte';
@@ -14,7 +15,6 @@
 
 	const session = new MultiplayerSession();
 	const state = $derived(session.state);
-	const inMatch = $derived(state?.phase === 'playing' || state?.phase === 'result');
 
 	onMount(() => () => session.stop());
 
@@ -32,85 +32,89 @@
 	});
 </script>
 
-<div class="app" class:fill={inMatch}>
-	<header>
-		<h1>Wordle</h1>
-	</header>
+<svelte:head>
+	<title>Wordle · B vs S</title>
+</svelte:head>
 
-	{#if !data.player}
-		<PlayerPicker />
-	{:else}
-		{@const me = data.player}
-		{@const opponent = opponentOf(me)}
+{#if !data.player}
+	<PlayerPicker />
+{:else}
+	{@const me = data.player}
+	{@const opponent = opponentOf(me)}
 
-		{#if session.error}
-			<p class="error">{session.error}</p>
-		{/if}
+	{#if session.error}
+		<p class="error">{session.error}</p>
+	{/if}
 
-		{#if state && (state.phase === 'playing' || state.phase === 'result')}
+	{#if state && (state.phase === 'playing' || state.phase === 'result')}
+		<div class="fill">
 			<MultiplayerMatch
 				match={state.match}
 				{me}
 				{opponent}
 				onGuess={session.submitGuess}
-				onPlayAgain={session.playAgain}
+				onHome={session.goHome}
 				streak={data.streak?.current}
 			/>
-		{:else}
-			<div class="lobby">
-				<WaitingRoom
-					{opponent}
-					opponentOnline={state?.phase === 'waiting' && state.opponentOnline}
-					opponentReady={state?.phase === 'waiting' && state.opponentReady}
-					cancelled={session.cancelled}
-				/>
-				<div class="stats">
-					{#if data.streak}
-						<StreakStats streak={data.streak} />
-					{/if}
-					<MatchHistory history={data.history} />
-				</div>
+		</div>
+	{:else}
+		<div class="home">
+			<div class="action">
+				{#if session.cancelled}
+					<p class="cancelled">Match cancelled — a player was away for over a minute.</p>
+				{/if}
+				{#if state?.phase === 'queued'}
+					<WaitingRoom {opponent} opponentOnline={state.opponentOnline} onCancel={session.leaveQueue} />
+				{:else}
+					<EnterMatch
+						{opponent}
+						opponentQueued={state?.phase === 'home' && state.opponentQueued}
+						onEnter={session.enterQueue}
+					/>
+				{/if}
 			</div>
-		{/if}
+			<div class="stats">
+				{#if data.streak}
+					<StreakStats streak={data.streak} />
+				{/if}
+				<MatchHistory history={data.history} />
+			</div>
+		</div>
 	{/if}
-</div>
+{/if}
 
 <style>
-	.app {
-		max-width: 500px;
-		margin: 0 auto;
-		min-height: 100dvh;
+	.fill {
+		flex: 1;
+		min-height: 0;
 		display: flex;
 		flex-direction: column;
 	}
-	.app.fill {
-		height: 100dvh;
-		overflow: hidden;
-	}
-	header {
+	.home {
 		display: flex;
+		flex-direction: column;
+		gap: 56px;
+		padding: 56px 0 32px;
+	}
+	/* Fixed height so swapping the button for the loader doesn't shift the page. */
+	.action {
+		min-height: 124px;
+		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		height: 52px;
-		flex-shrink: 0;
-		border-bottom: 1px solid var(--tile-border);
-	}
-	.lobby {
-		display: flex;
-		flex-direction: column;
-		gap: 64px;
-		padding: 64px 0 32px;
 	}
 	.stats {
 		display: flex;
 		flex-direction: column;
 		gap: 32px;
 	}
-	h1 {
-		margin: 0;
-		font-family: Georgia, 'Times New Roman', serif;
-		font-size: 1.75rem;
-		letter-spacing: 0.02em;
+	.cancelled {
+		margin: 0 16px 24px;
+		font-size: 0.9rem;
+		font-weight: 700;
+		color: var(--lost);
+		text-align: center;
 	}
 	.error {
 		margin: 8px 16px 0;

@@ -57,16 +57,20 @@
 				streak={data.streak?.current}
 			/>
 		{:else}
-			<WaitingRoom
-				{opponent}
-				opponentOnline={state?.phase === 'waiting' && state.opponentOnline}
-				opponentReady={state?.phase === 'waiting' && state.opponentReady}
-				cancelled={session.cancelled}
-			/>
-			{#if data.streak}
-				<StreakStats streak={data.streak} />
-			{/if}
-			<MatchHistory history={data.history} />
+			<div class="lobby">
+				<WaitingRoom
+					{opponent}
+					opponentOnline={state?.phase === 'waiting' && state.opponentOnline}
+					opponentReady={state?.phase === 'waiting' && state.opponentReady}
+					cancelled={session.cancelled}
+				/>
+				<div class="stats">
+					{#if data.streak}
+						<StreakStats streak={data.streak} />
+					{/if}
+					<MatchHistory history={data.history} />
+				</div>
+			</div>
 		{/if}
 	{/if}
 </div>
@@ -90,6 +94,17 @@
 		height: 52px;
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--tile-border);
+	}
+	.lobby {
+		display: flex;
+		flex-direction: column;
+		gap: 64px;
+		padding: 64px 0 32px;
+	}
+	.stats {
+		display: flex;
+		flex-direction: column;
+		gap: 32px;
 	}
 	h1 {
 		margin: 0;

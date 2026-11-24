@@ -36,7 +36,7 @@
 
 <style>
 	section {
-		padding: 0 16px 32px;
+		padding: 0 16px;
 	}
 	h3 {
 		margin: 0 0 8px;

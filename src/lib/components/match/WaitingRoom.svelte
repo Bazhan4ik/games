@@ -27,7 +27,7 @@
 <style>
 	.waiting {
 		text-align: center;
-		padding: 40px 16px;
+		padding: 0 16px;
 	}
 	p {
 		margin: 16px 0 0;

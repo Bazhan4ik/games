@@ -10,7 +10,6 @@ import type { Streak } from '#lib/multiplayer/types.ts';
 interface StreakDoc {
 	_id: 'streak';
 	current: number;
-	best: number;
 	/** YYYY-MM-DD in STREAK_TIMEZONE of the last finished match. */
 	lastDay: string;
 }
@@ -53,8 +52,7 @@ export async function recordFinishedMatch(finishedAt: Date) {
 					},
 					lastDay: today
 				}
-			},
-			{ $set: { best: { $max: ['$best', '$current'] } } }
+			}
 		],
 		{ upsert: true }
 	);
@@ -62,5 +60,5 @@ export async function recordFinishedMatch(finishedAt: Date) {
 
 export async function getStreak(): Promise<Streak> {
 	const doc = await (await stats()).findOne({ _id: 'streak' });
-	return { current: doc?.current ?? 0, best: doc?.best ?? 0 };
+	return { current: doc?.current ?? 0, playedToday: doc?.lastDay === dayOf(new Date()) };
 }

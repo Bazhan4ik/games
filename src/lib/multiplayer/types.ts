@@ -24,7 +24,8 @@ export type LobbyState =
 
 export interface Streak {
 	current: number;
-	best: number;
+	/** A match was finished today, so today already counts towards the streak. */
+	playedToday: boolean;
 }
 
 export interface MatchSummary {

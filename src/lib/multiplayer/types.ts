@@ -22,6 +22,11 @@ export type LobbyState =
 	| { phase: 'playing'; match: MatchView }
 	| { phase: 'result'; match: MatchView };
 
+export interface Streak {
+	current: number;
+	best: number;
+}
+
 export interface MatchSummary {
 	id: string;
 	word: string;

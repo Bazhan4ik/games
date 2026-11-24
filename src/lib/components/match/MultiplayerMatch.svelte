@@ -12,9 +12,11 @@
 		opponent: Player;
 		onGuess: GuessHandler;
 		onPlayAgain: () => void;
+		/** Daily streak to show on the result card. */
+		streak?: number;
 	}
 
-	let { match, me, opponent, onGuess, onPlayAgain }: Props = $props();
+	let { match, me, opponent, onGuess, onPlayAgain, streak }: Props = $props();
 
 	const finished = $derived(match.status === 'finished');
 	const iAmDone = $derived(
@@ -66,6 +68,9 @@
 				{/if}
 			</p>
 			<p class="word">{match.word}</p>
+			{#if streak}
+				<p class="streak">Day streak: <strong>{streak}</strong></p>
+			{/if}
 			<button onclick={onPlayAgain}>Play again</button>
 		</div>
 	{/if}
@@ -125,6 +130,17 @@
 		font-weight: 700;
 		letter-spacing: 0.15em;
 		text-transform: uppercase;
+	}
+	.word:has(+ .streak) {
+		margin-bottom: 8px;
+	}
+	.streak {
+		margin: 0 0 20px;
+		font-size: 0.9rem;
+		color: var(--muted);
+	}
+	.streak strong {
+		color: var(--text);
 	}
 	button {
 		padding: 12px 28px;

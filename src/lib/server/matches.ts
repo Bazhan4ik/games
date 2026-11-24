@@ -1,6 +1,7 @@
 import { ObjectId, type Collection } from 'mongodb';
 import { getDb } from './db.ts';
 import { randomAnswer, isValidWord } from './words/index.ts';
+import { recordFinishedMatch } from './streak.ts';
 import { PLAYERS, opponentOf, type Player } from '#lib/players.ts';
 import { evaluateGuess, isSolved } from '#lib/wordle/evaluate.ts';
 import { DEFAULT_MAX_GUESSES, DEFAULT_WORD_LENGTH } from '#lib/wordle/config.ts';
@@ -198,11 +199,17 @@ export async function submitGuess(player: Player, matchId: string, raw: string):
 	);
 	if (!updated) return { ok: false, error: 'Match is over' };
 
-	if (isSolved(result)) {
-		// First solver wins; the status filter makes this a no-op for whoever is second.
-		await matches.updateOne({ _id, status: 'active' }, finishedFields(player));
-	} else if (PLAYERS.every((p) => isDone(updated, p))) {
-		await matches.updateOne({ _id, status: 'active' }, finishedFields(null));
+	const finish = isSolved(result)
+		? finishedFields(player)
+		: PLAYERS.every((p) => isDone(updated, p))
+			? finishedFields(null)
+			: null;
+
+	if (finish) {
+		// First solver wins; the status filter makes this a no-op for whoever is second,
+		// so only the request that actually finished the match counts towards the streak.
+		const { modifiedCount } = await matches.updateOne({ _id, status: 'active' }, finish);
+		if (modifiedCount === 1) await recordFinishedMatch(finish.$set.finishedAt);
 	}
 
 	return { ok: true, result };

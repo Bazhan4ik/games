@@ -5,6 +5,7 @@
 	import WaitingRoom from '#lib/components/match/WaitingRoom.svelte';
 	import MultiplayerMatch from '#lib/components/match/MultiplayerMatch.svelte';
 	import MatchHistory from '#lib/components/match/MatchHistory.svelte';
+	import StreakStats from '#lib/components/match/StreakStats.svelte';
 	import { MultiplayerSession } from '#lib/multiplayer/session.svelte.ts';
 	import { opponentOf } from '#lib/players.ts';
 	import type { PageProps } from './$types';
@@ -56,6 +57,7 @@
 				{opponent}
 				onGuess={session.submitGuess}
 				onPlayAgain={session.playAgain}
+				streak={data.streak?.current}
 			/>
 		{:else}
 			<WaitingRoom
@@ -64,6 +66,9 @@
 				opponentReady={state?.phase === 'waiting' && state.opponentReady}
 				cancelled={session.cancelled}
 			/>
+			{#if data.streak}
+				<StreakStats streak={data.streak} />
+			{/if}
 			<MatchHistory history={data.history} />
 		{/if}
 	{/if}

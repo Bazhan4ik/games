@@ -9,5 +9,9 @@ export const variables = defineEnvVars({
 	MONGODB_DB: {
 		description: 'MongoDB database name',
 		schema: (value) => value || 'wordle'
+	},
+	STREAK_TIMEZONE: {
+		description: 'IANA timezone that decides where one day ends for the daily streak',
+		schema: (value) => value || 'America/Toronto'
 	}
 });

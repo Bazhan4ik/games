@@ -2,14 +2,16 @@ import { fail } from '@sveltejs/kit';
 import { isPlayer } from '#lib/players.ts';
 import { getPlayer, setPlayer } from '#lib/server/player.ts';
 import { matchHistory } from '#lib/server/matches.ts';
+import { getStreak } from '#lib/server/streak.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ cookies, depends }) => {
 	depends('app:history');
 	const player = getPlayer(cookies);
-	if (!player) return { player: null, history: [] };
+	if (!player) return { player: null, history: [], streak: null };
 
-	return { player, history: await matchHistory() };
+	const [history, streak] = await Promise.all([matchHistory(), getStreak()]);
+	return { player, history, streak };
 };
 
 export const actions: Actions = {

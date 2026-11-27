@@ -21,7 +21,7 @@
 </svelte:head>
 
 <div class="detail">
-	<a class="back" href="/">‹ Back</a>
+	<a class="back" href="/wordle">‹ Back</a>
 
 	<div class="summary">
 		<p class="headline">

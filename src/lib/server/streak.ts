@@ -3,14 +3,19 @@ import { getDb } from './db.ts';
 import type { Streak } from '#lib/multiplayer/types.ts';
 
 /**
- * Shared daily streak: consecutive days with at least one finished match.
- * Only changes when a match finishes (cancelled matches never count), so a
- * missed day shows up as a reset the next time a match is finished.
+ * Shared daily streak per game: consecutive days that counted (Wordle: at least one
+ * finished match; Pictionary: both players drew). Only changes when a day is recorded,
+ * so a missed day shows up as a reset the next time one is.
  */
+export type StreakGame = 'wordle' | 'pictionary';
+
+// Wordle keeps the original `streak` id so existing streaks carry over.
+const STREAK_IDS: Record<StreakGame, string> = { wordle: 'streak', pictionary: 'pictionary-streak' };
+
 interface StreakDoc {
-	_id: 'streak';
+	_id: string;
 	current: number;
-	/** YYYY-MM-DD in STREAK_TIMEZONE of the last finished match. */
+	/** YYYY-MM-DD in STREAK_TIMEZONE of the last day that counted. */
 	lastDay: string;
 }
 
@@ -22,7 +27,7 @@ const dayFormat = new Intl.DateTimeFormat('en-CA', {
 });
 
 /** Calendar day (YYYY-MM-DD) in the streak timezone. */
-const dayOf = (date: Date) => dayFormat.format(date);
+export const dayOf = (date: Date) => dayFormat.format(date);
 
 function previousDay(day: string) {
 	const [y, m, d] = day.split('-').map(Number);
@@ -31,13 +36,13 @@ function previousDay(day: string) {
 
 const stats = async () => (await getDb()).collection<StreakDoc>('stats');
 
-export async function recordFinishedMatch(finishedAt: Date) {
-	const today = dayOf(finishedAt);
+export async function recordStreakDay(game: StreakGame, at: Date) {
+	const today = dayOf(at);
 	const yesterday = previousDay(today);
 
 	// Single atomic pipeline update, so two near-simultaneous finishes can't double count.
 	await (await stats()).updateOne(
-		{ _id: 'streak' },
+		{ _id: STREAK_IDS[game] },
 		[
 			{
 				$set: {
@@ -58,7 +63,7 @@ export async function recordFinishedMatch(finishedAt: Date) {
 	);
 }
 
-export async function getStreak(): Promise<Streak> {
-	const doc = await (await stats()).findOne({ _id: 'streak' });
+export async function getStreak(game: StreakGame): Promise<Streak> {
+	const doc = await (await stats()).findOne({ _id: STREAK_IDS[game] });
 	return { current: doc?.current ?? 0, playedToday: doc?.lastDay === dayOf(new Date()) };
 }

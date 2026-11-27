@@ -1,19 +1,28 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+
+	const title = $derived(
+		page.url.pathname.startsWith('/wordle')
+			? 'Wordle'
+			: page.url.pathname.startsWith('/pictionary')
+				? 'Pictionary'
+				: 'B vs S'
+	);
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Wordle · B vs S</title>
+	<title>B vs S</title>
 	<meta name="theme-color" content="#ffffff" />
 </svelte:head>
 
 <div class="shell">
 	<header>
-		<a href="/"><h1>Wordle</h1></a>
+		<a href="/"><h1>{title}</h1></a>
 	</header>
 	{@render children()}
 </div>
@@ -47,7 +56,7 @@
 		display: flex;
 		flex-direction: column;
 	}
-	/* During a match the board + keyboard fill the screen exactly, with no page scroll. */
+	/* During a match (or while drawing) the game fills the screen exactly, with no page scroll. */
 	.shell:has(:global(.fill)) {
 		height: 100dvh;
 		overflow: hidden;

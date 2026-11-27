@@ -1,6 +1,9 @@
-# Wordle — B vs S
+# B vs S
 
-Two-player race Wordle. Both players get the same word; first to solve it wins.
+Two-player games. `/` picks the player (once) and then the game:
+
+- **Wordle** (`/wordle`) — race Wordle. Both players get the same word; first to solve it wins.
+- **Pictionary** (`/pictionary`) — one hard-to-draw word a day; both draw it, then compare and react.
 
 ## Setup
 
@@ -17,7 +20,8 @@ Set `MONGODB_URI` (and optionally `MONGODB_DB`, default `wordle`, and `STREAK_TI
 
 - `matches` — one document per match (answer, both players' guesses, winner). A unique partial index ensures only one active match exists at a time; a TTL index removes abandoned ones.
 - `presence` — last heartbeat per player, used for matchmaking.
-- `stats` — the daily streak (`current`, `lastDay`).
+- `stats` — the daily streaks (`current`, `lastDay`): `_id: 'streak'` for Wordle, `'pictionary-streak'` for Pictionary.
+- `drawings` — one document per player per day (`_id: "YYYY-MM-DD:B"`), with the word, strokes and the reaction it got. Never deleted; only today's are shown.
 
 For MongoDB Atlas + Vercel, allow access from anywhere (`0.0.0.0/0`) under Network Access, since Vercel functions don't have fixed IPs.
 
@@ -30,11 +34,20 @@ Import the repo in Vercel and add `MONGODB_URI` (and `MONGODB_DB` if needed) und
 - **Player identity**: first visit asks "B or S?" and stores it in an httpOnly cookie that expires after 7 days (it isn't refreshed, so the device picks again weekly). There's no way to switch: the server refuses a new pick while the cookie exists.
 - **Matchmaking**: the home page has an "Enter match" button. Pressing it puts the player in a server-side queue (`presence.queued`, via `POST /api/queue`) and shows the loader (with Cancel). Each client polls `GET /api/state` every 1.5s (Vercel functions can't hold websockets); the poll doubles as a heartbeat. When both players are queued and online, a match is created and both leave the queue. A player on the home page sees "S is waiting for you" when the other is already queued. A fresh page load always starts on the home page, out of the queue.
 - **After a match**: the result card's "Back to home" returns to the home page; entering again starts the next match.
-- **Match details**: every guess of both players is stored on the match. Each row in the home page's match list links to `/match/[id]`, which shows both players' boards. Only finished matches are viewable, so the answer of a live match can't be peeked at.
+- **Match details**: every guess of both players is stored on the match. Each row in the Wordle page's match list links to `/wordle/match/[id]`, which shows both players' boards. Only finished matches are viewable, so the answer of a live match can't be peeked at.
 - **Guesses** are validated and scored on the server (`POST /api/guess`), so the answer never reaches the browser until the match ends. The opponent's progress is shown as colours only.
 - **Ending**: first correct guess wins. If both run out of guesses it's recorded as a draw (shown grey in the history).
 - **Daily streak**: one shared streak — consecutive days (in `STREAK_TIMEZONE`) with at least one finished match. It only updates when a match finishes: same day → unchanged, day after the last one → +1, any gap → back to 1. Draws count; cancelled matches don't. Because it only changes on a finish, a missed day shows up as a reset the next time a match finishes. Shown in the lobby next to a flame that's grey until a match has been finished today, then orange/red; also on the result card. Logic lives in `src/lib/server/streak.ts`.
 - **Abandoned matches**: each poll is also a heartbeat on the active match (`seen.B` / `seen.S`), and `expiresAt` = least-recent heartbeat + 60s. Once a player has been away for a minute (tab closed, or hidden — polling pauses while the tab is in the background), the match is deleted outright, so it never shows up in history. The remaining player sees a countdown, then a "match cancelled" notice. If both players leave, a MongoDB TTL index on `expiresAt` deletes it (Mongo's TTL sweep runs every ~60s, so it can take up to an extra minute).
+
+## Pictionary
+
+- **Daily word**: `src/lib/server/words/draw-words.ts`, one word per calendar day (in `STREAK_TIMEZONE`) in list order, wrapping around. Append new words at the end so past days keep their word.
+- **Drawing**: black pen only, mouse or finger (pointer events, `touch-action: none`), with Undo. Submitting is final; the unique `_id` per player per day blocks a second drawing.
+- **Format** (`src/lib/pictionary/strokes.ts`): vector strokes on a 1000×1000 grid, delta-encoded as text — `x,y,dx,dy,…` per stroke, strokes separated by `;`. Points closer than 3 units are dropped while drawing. A typical drawing is a few KB. The same renderer draws live and replays, so a drawing looks exactly as drawn at any size. The server validates the format.
+- **Visibility**: the opponent's drawing is only sent once you've submitted yours. While waiting (for their drawing or reaction) the page re-checks every 10s.
+- **Reactions**: once both have drawn, react to the other drawing with 🤔 🤮 🤨 (changeable). The reaction you received shows under your own drawing.
+- **Streak**: separate from Wordle's — consecutive days on which both players drew.
 
 ## Project layout
 
@@ -46,13 +59,18 @@ src/lib/
   components/wordle/      reusable, mode-agnostic UI
     WordleGame.svelte     board + keyboard + input; evaluation delegated via `onGuess`
     Board / Tile / Keyboard / MiniBoard / GuessGrid (read-only board)
-  components/match/       two-player screens (picker, enter button, waiting room, match, streak, history)
+  components/match/       Wordle two-player screens (picker, enter button, waiting room, match, history)
+  components/pictionary/  DrawCanvas (input) and Drawing (read-only replay)
+  components/             Flame + StreakStats, shared by both games
+  pictionary/             stroke encoding/rendering + shared types
   multiplayer/            client polling session + shared API types
   server/                 MongoDB, match logic, word lists, player cookie
 routes/
   +layout.svelte          shared header
-  +page.*                 home page (picker, Enter match, matchmaking, match, history)
-  match/[id]/             one finished match: both players' guesses
+  +page.*                 player picker, then game choice with each game's streak
+  wordle/+page.*          Wordle home (Enter match, matchmaking, match, history)
+  wordle/match/[id]/      one finished match: both players' guesses
+  pictionary/+page.*      today's word: canvas, or both drawings + reactions (form actions draw/react)
   api/state|queue|guess|ack|leave
 ```
 

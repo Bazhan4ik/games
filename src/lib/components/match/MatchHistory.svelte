@@ -20,7 +20,7 @@
 		<ol>
 			{#each history as m (m.id)}
 				<li>
-					<a href="/match/{m.id}">
+					<a href="/wordle/match/{m.id}">
 						{#if m.winner && m.loser}
 							<span class="won">{m.winner}</span>
 							<span class="lost">{m.loser}</span>
